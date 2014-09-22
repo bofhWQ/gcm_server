@@ -1,0 +1,11 @@
+<config>
+    <gcm>
+        <projectid>123456789</projectid>
+        <serverkey>topsecrect</serverkey>
+    </gcm>
+    <jdbc>
+        <db>gcm</db>
+        <user>gcm</user>
+        <password>1234</password>
+    </jdbc>
+</config>

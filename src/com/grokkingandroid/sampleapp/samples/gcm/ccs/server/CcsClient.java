@@ -499,9 +499,13 @@ public class CcsClient {
     }
 
     public static void main(String[] args) {
-        final String projectId = args[0];
-        final String password = args[1];
-        final String toRegId = args[2];
+    	Config config=new Config("config.xml");
+    	logger.log(Level.INFO, "config: projectid:" + config.projectid+" key:"+config.serverkey+" db:"+config.db+" user"+config.dbuser+" passwd:"+config.dbpassword);
+    	
+        final String projectId = config.projectid;
+        final String password = config.serverkey;
+        
+        
 
         CcsClient ccsClient = CcsClient.prepareClient(projectId, password, true);
 
@@ -512,13 +516,14 @@ public class CcsClient {
         }
 
         // Send a sample hello downstream message to a device.
+        
         String messageId = ccsClient.getRandomMessageId();
         Map<String, String> payload = new HashMap<String, String>();
         payload.put("message", "Simple sample sessage");
         String collapseKey = "sample";
         Long timeToLive = 10000L;
         Boolean delayWhileIdle = true;
-        ccsClient.send(createJsonMessage(toRegId, messageId, payload, collapseKey,
-                timeToLive, delayWhileIdle));
+       
+        //ccsClient.send(createJsonMessage(toRegId, messageId, payload, collapseKey, timeToLive, delayWhileIdle));
     }
 }
