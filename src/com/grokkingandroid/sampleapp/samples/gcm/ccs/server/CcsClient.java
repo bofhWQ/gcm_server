@@ -14,6 +14,9 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ * 
+ * BOFH@willstequatschen.de
+ * - 2014-09-22 modify to compile with smack 4.0.1 and Java 8
  */
 package com.grokkingandroid.sampleapp.samples.gcm.ccs.server;
 
@@ -22,6 +25,8 @@ import org.jivesoftware.smack.ConnectionConfiguration.SecurityMode;
 import org.jivesoftware.smack.ConnectionListener;
 import org.jivesoftware.smack.PacketInterceptor;
 import org.jivesoftware.smack.PacketListener;
+import org.jivesoftware.smack.SmackException;
+import org.jivesoftware.smack.SmackException.NotConnectedException;
 import org.jivesoftware.smack.XMPPConnection;
 import org.jivesoftware.smack.XMPPException;
 import org.jivesoftware.smack.filter.PacketTypeFilter;
@@ -31,11 +36,14 @@ import org.jivesoftware.smack.packet.Packet;
 import org.jivesoftware.smack.packet.PacketExtension;
 import org.jivesoftware.smack.provider.PacketExtensionProvider;
 import org.jivesoftware.smack.provider.ProviderManager;
+import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.util.StringUtils;
+import org.jivesoftware.smack.util.XmlStringBuilder;
 import org.json.simple.JSONValue;
 import org.json.simple.parser.ParseException;
 import org.xmlpull.v1.XmlPullParser;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -99,14 +107,13 @@ public class CcsClient {
                     GCM_NAMESPACE, json, GCM_ELEMENT_NAME);
         }
 
-        @SuppressWarnings("unused")
         public Packet toPacket() {
             return new Message() {
                 // Must override toXML() because it includes a <body>
                 @Override
-                public String toXML() {
+                public XmlStringBuilder toXML() {
 
-                    StringBuilder buf = new StringBuilder();
+                    XmlStringBuilder buf = new XmlStringBuilder();
                     buf.append("<message");
                     if (getXmlns() != null) {
                         buf.append(" xmlns=\"").append(getXmlns()).append("\"");
@@ -126,7 +133,7 @@ public class CcsClient {
                     buf.append(">");
                     buf.append(GcmPacketExtension.this.toXML());
                     buf.append("</message>");
-                    return buf.toString();
+                    return buf;
                 }
             };
         }
@@ -157,7 +164,7 @@ public class CcsClient {
 
     private CcsClient() {
         // Add GcmPacketExtension
-        ProviderManager.getInstance().addExtensionProvider(GCM_ELEMENT_NAME,
+        ProviderManager.addExtensionProvider(GCM_ELEMENT_NAME,
                 GCM_NAMESPACE, new PacketExtensionProvider() {
 
                     @Override
@@ -187,7 +194,12 @@ public class CcsClient {
      */
     public void send(String jsonRequest) {
         Packet request = new GcmPacketExtension(jsonRequest).toPacket();
-        connection.sendPacket(request);
+        try {
+			connection.sendPacket(request);
+		} catch (NotConnectedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
     }
 
     /// new: for sending messages to a list of recipients
@@ -197,7 +209,7 @@ public class CcsClient {
      */
     public void sendBroadcast(Map<String, String> payload, String collapseKey,
             long timeToLive, Boolean delayWhileIdle, List<String> recipients) {
-        Map map = createAttributeMap(null, null, payload, collapseKey,
+        Map<String, Object> map = createAttributeMap(null, null, payload, collapseKey,
                     timeToLive, delayWhileIdle);
         for (String toRegId: recipients) {
             String messageId = getRandomMessageId();
@@ -284,11 +296,11 @@ public class CcsClient {
                 collapseKey, timeToLive, delayWhileIdle));
     }
     
-    public static String createJsonMessage(Map map) {
+    public static String createJsonMessage(Map<String, Object> map) {
         return JSONValue.toJSONString(map);
     }
 
-    public static Map createAttributeMap(String to, String messageId, Map<String, String> payload,
+    public static Map<String, Object> createAttributeMap(String to, String messageId, Map<String, String> payload,
             String collapseKey, Long timeToLive, Boolean delayWhileIdle) {
         Map<String, Object> message = new HashMap<String, Object>();
         if (to != null) {
@@ -361,10 +373,15 @@ public class CcsClient {
         config.setDebuggerEnabled(mDebuggable);
 
         // -Dsmack.debugEnabled=true
-        XMPPConnection.DEBUG_ENABLED = true;
+        //XMPPConnection.DEBUG_ENABLED = true;
 
-        connection = new XMPPConnection(config);
-        connection.connect();
+        connection = new XMPPTCPConnection(config);
+        try {
+			connection.connect();
+		} catch (SmackException | IOException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
 
         connection.addConnectionListener(new ConnectionListener() {
 
@@ -392,7 +409,23 @@ public class CcsClient {
             public void connectionClosed() {
                 logger.info("Connection closed.");
             }
+            
+           
+
+			@Override
+			public void connected(XMPPConnection connection) {
+				logger.info("Connected!");
+				
+			}
+
+			@Override
+			public void authenticated(XMPPConnection connection) {
+				logger.info("Authenticated");
+				
+			}
+            
         });
+        
 
         // Handle incoming packets
         connection.addPacketListener(new PacketListener() {
@@ -426,7 +459,12 @@ public class CcsClient {
             }
         }, new PacketTypeFilter(Message.class));
 
-        connection.login(mProjectId + "@gcm.googleapis.com", mApiKey);
+        try {
+			connection.login(mProjectId + "@gcm.googleapis.com", mApiKey);
+		} catch (SmackException | IOException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
         logger.log(Level.INFO, "logged in: " + mProjectId);
     }
 
