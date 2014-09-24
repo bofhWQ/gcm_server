@@ -29,11 +29,15 @@ import nu.xom.ParsingException;
 
 public class Config {
   
+	public String gcmserver;
+	public int gcmport;
 	public String projectid;
 	public String serverkey;
+	public String dbserver;
 	public String db;
 	public String dbuser;
 	public String dbpassword;
+	public int idle;
 	
 	private Builder builder;
 	public  Config(String name)
@@ -47,10 +51,14 @@ public class Config {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+		 gcmserver = doc.query("//gcm/server").get(0).getValue();
+		 gcmport = Integer.parseInt(doc.query("//gcm/port").get(0).getValue());
 		 projectid = doc.query("//gcm/projectid").get(0).getValue();
 		 serverkey=doc.query("//gcm/serverkey").get(0).getValue();
+		 dbserver=doc.query("//jdbc/server").get(0).getValue();
 		 db=doc.query("//jdbc/db").get(0).getValue();
 		 dbuser=doc.query("//jdbc/user").get(0).getValue();
 		 dbpassword=doc.query("//jdbc/password").get(0).getValue();
+		 idle=Integer.parseInt(doc.query("//sheduler/idle").get(0).getValue());
 	}
 }

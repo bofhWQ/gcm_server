@@ -15,8 +15,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  * 
- * BOFH@willstequatschen.de
+ * modification by BOFH@willstequatschen.de
  * - 2014-09-22 modify to compile with smack 4.0.1 and Java 8
+ * - 2014-09-24 use config.xml for configuration
+ * - 2014-09-24 get Message from Mysql Database
  */
 package com.grokkingandroid.sampleapp.samples.gcm.ccs.server;
 
@@ -44,6 +46,11 @@ import org.json.simple.parser.ParseException;
 import org.xmlpull.v1.XmlPullParser;
 
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,34 +72,36 @@ import javax.net.ssl.SSLSocketFactory;
  * as well as with sending messages to a list of recipients. The original code
  * only covers sending one message to exactly one recipient.
  */
-public class CcsClient {
+public class CcsClient 
+{
 
     public static final Logger logger = Logger.getLogger(CcsClient.class.getName());
-
-    public static final String GCM_SERVER = "gcm.googleapis.com";
-    public static final int GCM_PORT = 5235;
 
     public static final String GCM_ELEMENT_NAME = "gcm";
     public static final String GCM_NAMESPACE = "google:mobile:data";
 
     static Random random = new Random();
     XMPPConnection connection;
-    ConnectionConfiguration config;
+    ConnectionConfiguration connectionConfig;
 
+    protected Connection sqlConnection;
     /// new: some additional instance and class members
     private static CcsClient sInstance = null;
     private String mApiKey = null;
     private String mProjectId = null;
     private boolean mDebuggable = false;
 
+    public Config config;
     /**
      * XMPP Packet Extension for GCM Cloud Connection Server.
      */
-    class GcmPacketExtension extends DefaultPacketExtension {
+    class GcmPacketExtension extends DefaultPacketExtension 
+    {
 
         String json;
 
-        public GcmPacketExtension(String json) {
+        public GcmPacketExtension(String json) 
+        {
             super(GCM_ELEMENT_NAME, GCM_NAMESPACE);
             this.json = json;
         }
@@ -102,23 +111,29 @@ public class CcsClient {
         }
 
         @Override
-        public String toXML() {
+        public String toXML() 
+        {
             return String.format("<%s xmlns=\"%s\">%s</%s>", GCM_ELEMENT_NAME,
                     GCM_NAMESPACE, json, GCM_ELEMENT_NAME);
         }
 
-        public Packet toPacket() {
-            return new Message() {
+        public Packet toPacket() 
+        {
+            return new Message() 
+            {
                 // Must override toXML() because it includes a <body>
                 @Override
-                public XmlStringBuilder toXML() {
+                public XmlStringBuilder toXML() 
+                {
 
                     XmlStringBuilder buf = new XmlStringBuilder();
                     buf.append("<message");
-                    if (getXmlns() != null) {
+                    if (getXmlns() != null) 
+                    {
                         buf.append(" xmlns=\"").append(getXmlns()).append("\"");
                     }
-                    if (getLanguage() != null) {
+                    if (getLanguage() != null) 
+                    {
                         buf.append(" xml:lang=\"").append(getLanguage()).append("\"");
                     }
                     if (getPacketID() != null) {
@@ -300,7 +315,7 @@ public class CcsClient {
         return JSONValue.toJSONString(map);
     }
 
-    public static Map<String, Object> createAttributeMap(String to, String messageId, Map<String, String> payload,
+    public static Map<String, Object> createAttributeMap(String to, String messageId, Object payload,
             String collapseKey, Long timeToLive, Boolean delayWhileIdle) {
         Map<String, Object> message = new HashMap<String, Object>();
         if (to != null) {
@@ -362,20 +377,20 @@ public class CcsClient {
      * @throws XMPPException
      */
     public void connect() throws XMPPException {
-        config = new ConnectionConfiguration(GCM_SERVER, GCM_PORT);
-        config.setSecurityMode(SecurityMode.enabled);
-        config.setReconnectionAllowed(true);
-        config.setRosterLoadedAtLogin(false);
-        config.setSendPresence(false);
-        config.setSocketFactory(SSLSocketFactory.getDefault());
+        connectionConfig = new ConnectionConfiguration(config.gcmserver, config.gcmport);
+        connectionConfig.setSecurityMode(SecurityMode.enabled);
+        connectionConfig.setReconnectionAllowed(true);
+        connectionConfig.setRosterLoadedAtLogin(false);
+        connectionConfig.setSendPresence(false);
+        connectionConfig.setSocketFactory(SSLSocketFactory.getDefault());
 
         // NOTE: Set to true to launch a window with information about packets sent and received
-        config.setDebuggerEnabled(mDebuggable);
+        connectionConfig.setDebuggerEnabled(mDebuggable);
 
         // -Dsmack.debugEnabled=true
         //XMPPConnection.DEBUG_ENABLED = true;
 
-        connection = new XMPPTCPConnection(config);
+        connection = new XMPPTCPConnection(connectionConfig);
         try {
 			connection.connect();
 		} catch (SmackException | IOException e1) {
@@ -514,16 +529,114 @@ public class CcsClient {
         } catch (XMPPException e) {
             e.printStackTrace();
         }
-
+        try {
+      
+            Class.forName("com.mysql.jdbc.Driver").newInstance();
+        } catch (Exception e) {
+        	e.printStackTrace();
+        }
+        
+        try {
+          ccsClient.sqlConnection = DriverManager.getConnection("jdbc:mysql://localhost/test?user=monty&password=greatsqldb");
+        } catch (SQLException ex) {
+            // Fehler behandeln
+            System.out.println("SQLException: " + ex.getMessage());
+            System.out.println("SQLState: " + ex.getSQLState());
+            System.out.println("VendorError: " + ex.getErrorCode());
+        }
+        ccsClient.shedule();
         // Send a sample hello downstream message to a device.
         
-        String messageId = ccsClient.getRandomMessageId();
-        Map<String, String> payload = new HashMap<String, String>();
-        payload.put("message", "Simple sample sessage");
-        String collapseKey = "sample";
-        Long timeToLive = 10000L;
-        Boolean delayWhileIdle = true;
-       
-        //ccsClient.send(createJsonMessage(toRegId, messageId, payload, collapseKey, timeToLive, delayWhileIdle));
+        
     }
-}
+    
+    
+    public void shedule()
+    {
+    	while(true)
+        {
+    		int messages;
+        	do
+        	{
+        	  messages=getMessageFromDB();
+        	} while ( messages > 0);
+        	
+        	try 
+        	{
+				Thread.sleep(config.idle);
+			} 
+        	catch (InterruptedException e) 
+        	{
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+        }
+    } 
+    
+    
+    protected int getMessageFromDB()
+    {
+    	int result=0;
+    
+    	Statement stmt = null;
+    	ResultSet rs = null;
+
+    	try 
+    	{
+    	    stmt = sqlConnection.createStatement();
+    	    rs = stmt.executeQuery("SELECT *  FROM outgoing left outer join collapsekeys on outgoing.collapsekeyid= collapsekeys.id  where statusid = 1 or status = 5 ");
+    	    // Tue etwas mit dem ResultSet ....
+    	    while (rs.next()) 
+    	    {
+    	        // it is possible to get the columns via name
+    	        // also possible to get the columns via the column number
+    	        // which starts at 1
+    	        // e.g., resultSet.getSTring(2);
+    	        int id = rs.getInt("id");
+    	        String regid = rs.getString("regid");
+    	        String payload=rs.getString("payload");
+    	        String collapsekey=rs.getString("collapsekey");
+    	        Boolean delayWhileIdle=rs.getInt("delayWhileIdle") > 0;
+    	        Long ttl=rs.getLong("ttl");
+    	        createAttributeMap(regid,""+id,payload,collapsekey,ttl,delayWhileIdle);
+    	     }
+    	} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} 
+    	finally 
+    	{
+    	    // Ressourcen sollten immer in einem
+    	    // finally{}-Block
+    	    // in der umgekehrten Reihenfolge ihrer Zuweisung
+    	    // freigegeben werden
+
+    	    if (rs != null) 
+    	    {
+    	        try 
+    	        {
+    	            rs.close();
+    	        } 
+    	        catch (SQLException sqlEx) 
+    	        { // ignore }
+
+    	        	rs = null;
+    	        }
+    	    }
+
+    	    if (stmt != null) 
+    	    {
+    	        try 
+    	        {
+    	            stmt.close();
+    	        } 
+    	        catch (SQLException sqlEx) 
+    	        { // ignore }
+
+    	        	stmt = null;
+    	        }
+    	    }
+    	}
+    	return result;
+    }
+ }

@@ -1,11 +1,17 @@
 <config>
+    <sheduler>
+    	<idle>1000</idle>
+    </sheduler>
     <gcm>
+        <server>gcm.googleapis.com</server>
+        <port>5235</port>
         <projectid>123456789</projectid>
         <serverkey>topsecrect</serverkey>
     </gcm>
     <jdbc>
-        <db>gcm</db>
-        <user>gcm</user>
+    	<server>localhost</server>
+        <db>ccs</db>
+        <user>ccs</user>
         <password>1234</password>
     </jdbc>
 </config>
